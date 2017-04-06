@@ -1,12 +1,13 @@
 /* File: vfs.cpp
  * Author: CRE
- * Last Edited: Sun Apr  2 16:06:10 2017
+ * Last Edited: Thu Apr  6 14:10:24 2017
  */
 
 #include "crelib/crelib.h"
 #include <stdio.h>
 #include <map>
 #include <string>
+#include <string.h>
 #include <sstream>
 #include <math.h>
 using namespace std;
@@ -55,6 +56,29 @@ void getFreqInFile(map<string, uint> &FreqS, const char * FileName)
 	free (Buffer);
 }
 
+uint64 readFreq(map<string, uint> &FreqS, const char * FileName)
+{
+	FILE * InFile=fopen(FileName, "r");
+	if (InFile==NULL) die("no such file %s.", FileName);
+
+	char * Buffer=myalloc(BUFFER_SIZE, char);
+	uint64 Temp;
+	uint64 Total=0xFFFFFFFFFFFFFFFF;
+	FreqS.clear();
+	while (fscanf(InFile,"%s:%llu", Buffer,&Temp)!=EOF)
+	{
+		if (strcmp("Total", Buffer)==0) 
+		{
+			Total=Temp;
+			continue;
+		}
+		FreqS[Buffer]=Temp;
+	}
+	fclose(InFile);
+	free (Buffer);
+	return Total;
+}
+
 double getC(double p, double MAF, uint N, map<string, uint> &FreqS, uint64 T=0xFFFFFFFFFFFFFFFF)
 {
 	double C=0;
@@ -90,27 +114,40 @@ double getC(double p, double MAF, uint N, map<string, uint> &FreqS, uint64 T=0xF
 
 void usage()
 {
-	die("Usage: vfs a.tsv [b.tsv c.tsv...] > statistics.txt");
+	die("Usage: vfs read a.tsv [b.tsv c.tsv...] > statistics.txt\n"
+			"or vfs stat statistics.txt"
+	   );
 }
 
 int main (int argc, char ** argv)
 {
 	if (argc==1) usage();
-	for (int i=1;i<argc;++i)
+	if (strcmp("read", argv[1])==0&&argc>1)
 	{
-		getFreqInFile(FreqS, argv[i]);
+		for (int i=2;i<argc;++i)
+		{
+			getFreqInFile(FreqS, argv[i]);
+		}
+		uint64 Total=0;
+		for (map<string,uint>::iterator i=FreqS.begin();i!=FreqS.end();++i)
+		{
+			if (i->first=="") continue;
+			if (i->first[0]<'0'||i->first[0]>'9') continue;
+			if (i!=FreqS.begin()) printf("\n");
+			printf("%s:%u", i->first.c_str(), i->second);
+			Total+=i->second;
+		}
+		printf("\nTotal:%llu",Total);
 	}
-	uint64 Total=0;
-	for (map<string,uint>::iterator i=FreqS.begin();i!=FreqS.end();++i)
+	else if (strcmp("stat", argv[1])==0&& argc>1)
 	{
-		if (i->first=="") continue;
-		if (i->first[0]<'0'||i->first[0]>'9') continue;
-		if (i!=FreqS.begin()) printf("\n");
-		printf("%s:%u", i->first.c_str(), i->second);
-		Total+=i->second;
+		readFreq(FreqS, argv[2]);
 	}
-	printf("\nTotal:%llu",Total);
-	printf ("\n1070 samples with MAF=0.001, variant find ratio=0.8, coverage=%lf", getC(0.8,0.001,1070,FreqS,Total));
-	printf ("\n1000 samples with MAF=0.001, variant find ratio=0.8, coverage=%lf", getC(0.8,0.001,1000,FreqS,Total));
+	else
+	{
+		usage();
+	}
+	//printf ("\n1070 samples with MAF=0.001, variant find ratio=0.8, coverage=%lf", getC(0.8,0.001,1070,FreqS,Total));
+	//printf ("\n1000 samples with MAF=0.001, variant find ratio=0.8, coverage=%lf", getC(0.8,0.001,1000,FreqS,Total));
 	return 0;
 }
